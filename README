@@ -1,0 +1,115 @@
+Message-Id: <20100311.041541.830887973246938787.yamato@redhat.com>
+Mime-Version: 1.0
+Content-Type: Text/Plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Subject: improvements for PowerMate.rb
+From: Masatake YAMATO <yamato@redhat.com>
+To: oliver@fakeroot.net
+Cc: klotz@graflex.org
+Date: Thu, 11 Mar 2010 04:15:41 +0900 (JST)
+X-Mailer: Mew version 6.2.51 on Emacs 22.3 / Mule 5.0 (SAKAKI)
+Organization: Red Hat Japan, Inc.
+
+Hi,
+
+Your PowerMate.rb doesn't work on x86_64 linux.
+I've written a patch to fix the issue based on PowerMate.rb maintained by
+Leigh L. Klotz, Jr. <klotz@graflex.org>.
+
+Look at http://graflex.org/klotz/software/griffin/ruby/.
+Leigh wants you to merge his improvement. Could you consider it?
+
+diff -ruN Bolzer-0_5.rb Klotz-0_5_1.rb
+--- Bolzer-0_5.rb       2010-03-11 03:25:53.500799535 +0900
++++ Klotz-0_5_1.rb      2010-03-11 03:25:47.709800067 +0900
+@@ -16,6 +16,14 @@
+ #
+ # == Revision History
+ #
++# v0.51 (October 22, 2002)
++# Leigh L. Klotz, Jr. <klotz@graflex.org>
++# The original has disappeared from
++# http://www.cip.informatik.uni-muenchen.de/~bolzer/ruby/
++# and I am mirroring it at
++# http://graflex.org/klotz/software/griffin/ruby
++# My v0.51 adds the "powermate" id string.
++#
+ # v0.5  (Feb 10, 2002)
+ # - remember LED status so we can set individual values
+ #   there is no way to know the previous values, so we set some sane
+@@ -276,8 +284,13 @@
+       next unless file =~ /^event\d+/  # only look at event*
+
+       begin
++        $stderr << "Checking: " + ('/dev/input/' + file) + "\n"
+         super( '/dev/input/' + file )
++        $stderr << "Name: " +  (' name=' + self.dev_name)+ "\n"
++
+         case self.dev_name
++        when "powermate"                                 # normal ID
++          break;
+         when "Griffin PowerMate"                           # normal ID
+           break
+         when "Griffin Technology, Inc. Griffin PowerMate"  # grabed by HID?
+
+
+As I wrote, my patch is based on Leigh's code.
+After merging Leigh's improvement, could you merge my patch?
+What I've done:
+
+* Use 24 as the value for EVENT_SIZE if the program runs on x86_64.
+* Use .class method instead of .type method. Ruby 1.8.6 (2009-08-04 patchlevel 383) [x86_64-linux]
+  requires this.
+* Set @device to nil if no powermate can be found.
+* Remove unessary whitespace in arguments list. The ruby interpreter warns this.
+
+Leigh, could you merge my patch if Oliver rejects mine;-P
+
+
+
+
+Signed-off-by: Masatake YAMATO <yamato@redhat.com>
+
+
+diff -ruN Klotz-0_5_1.rb   Yamato-0_5_2.rb
+--- Klotz-0_5_1.rb         2010-03-11 03:25:47.709800067 +0900
++++ Yamato-0_5_2.rb        2010-03-11 03:39:17.150799878 +0900
+@@ -114,7 +114,7 @@
+     # in Linux *.h files, +array+ is an Array consisting of
+     # [ direction bit, type (String), number, size ]
+     def Ioctl.encode( array )
+-      raise ArgumentError if array.type != Array
++      raise ArgumentError if array.class != Array
+       raise ArgumentError.new( "Array has wrong number of elements, must be 4" ) if array.size != 4
+
+       array[0] << IOC_DIRSHIFT | array[1].unpack('C').first << IOC_TYPESHIFT | array[2] << IOC_NRSHIFT | array[3] << IOC_SIZESHIFT;
+@@ -130,7 +130,11 @@
+
+     ## The event structure itself
+     Input_event = Struct.new( :time, :type, :code, :value )
+-    EVENT_SIZE = 16
++
++    EVENT_SIZE = (proc {
++      testdata = "abcdefghi"
++      testdata.unpack("l!") == testdata.unpack("l")
++    }).call() ? 16: 24
+
+     ## Protocol version
+     EV_VERSION = 0x010000
+@@ -297,6 +301,8 @@
+           break
+         when "Griffin SoundKnob"                           # old ID
+           break
++        else
++          @device = nil
+         end
+       rescue Errno::EACCES, Errno::ENODEV
+         next
+@@ -366,7 +372,7 @@
+             @btn_press_handler.call( event )
+            elsif @btn_release_handler
+                   @btn_pressed = false
+-               @btn_release_handler.call (event )
++               @btn_release_handler.call(event )
+            end
+         end
