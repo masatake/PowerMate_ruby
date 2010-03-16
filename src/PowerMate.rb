@@ -124,7 +124,7 @@ module Linux
     # in Linux *.h files, +array+ is an Array consisting of
     # [ direction bit, type (String), number, size ]
     def Ioctl.encode( array )
-      raise ArgumentError if array.type != Array
+      raise ArgumentError if array.class != Array
       raise ArgumentError.new( "Array has wrong number of elements, must be 4" ) if array.size != 4
       
       array[0] << IOC_DIRSHIFT | array[1].unpack('C').first << IOC_TYPESHIFT | array[2] << IOC_NRSHIFT | array[3] << IOC_SIZESHIFT;  
@@ -140,7 +140,11 @@ module Linux
 
     ## The event structure itself 
     Input_event = Struct.new( :time, :type, :code, :value )
-    EVENT_SIZE = 16
+
+    EVENT_SIZE = (proc {
+      testdata = "abcdefghi"
+      testdata.unpack("l!") == testdata.unpack("l")
+    }).call() ? 16: 24
 
     ## Protocol version
     EV_VERSION = 0x010000
@@ -307,6 +311,8 @@ class PowerMate < Linux::Input
           break
         when "Griffin SoundKnob"                           # old ID 
           break
+        else
+          @device = nil
         end
       rescue Errno::EACCES, Errno::ENODEV
         next
@@ -376,7 +382,7 @@ class PowerMate < Linux::Input
             @btn_press_handler.call( event )
            elsif @btn_release_handler
 	       @btn_pressed = false
-               @btn_release_handler.call (event )
+               @btn_release_handler.call(event )
            end
         end
 
