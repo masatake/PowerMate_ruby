@@ -18,6 +18,10 @@
 #
 # == Revision History
 #
+# v0.51+yamato1 (Thu Mar 18 03:53:54 2010)
+# Masatake YAMATO <yamato@redhat.com>
+# - Added DEVICE arugment to initialize method of PowerMate class.
+#
 # v0.51+yamato0 (Tue Mar 16 03:40:13 2010)
 # Masatake YAMATO <yamato@redhat.com>
 # - Use 24 as the value for EVENT_SIZE if the program runs on x86_64.
@@ -293,32 +297,55 @@ class PowerMate < Linux::Input
   # find and open the first PowerMate in the system,
   # tries /dev/input/event0*, raises RuntimeError if no
   # readable PowerMate is found (check those permissions, if it doesn't work!) 
-  def initialize 
-    Dir.foreach( '/dev/input/' ){|file|
-      next unless file =~ /^event\d+/  # only look at event*
-     
-      begin
-        $stderr << "Checking: " + ('/dev/input/' + file) + "\n"
-        super( '/dev/input/' + file )
-        $stderr << "Name: " +  (' name=' + self.dev_name)+ "\n"
+  def initialized?
+      case self.dev_name
+      when "powermate" 	                          # normal ID 
+        return true
+      when "Griffin PowerMate"                    # normal ID 
+        return true
+      when "Griffin Technology, Inc. Griffin PowerMate"  # grabed by HID?
+        return true
+      when "Griffin SoundKnob"                # old ID 
+        return true
+      else
+        return false
+      end
+  end
 
-        case self.dev_name
-        when "powermate" 	                          # normal ID 
-          break;
-        when "Griffin PowerMate"                           # normal ID 
-          break
-        when "Griffin Technology, Inc. Griffin PowerMate"  # grabed by HID?
-          break
-        when "Griffin SoundKnob"                           # old ID 
-          break
-        else
+  # TODO: Remove duplicated code
+  def initialize(device = false, verbose = true)
+    if device then              # specific
+      begin
+        $stderr << "Checking: " + (device) + "\n" if verbose
+        super(device)
+        $stderr << "Name: " +  (' name=' + self.dev_name)+ "\n" if verbose
+        unless self.initialized? then
           @device = nil
         end
       rescue Errno::EACCES, Errno::ENODEV
-        next
+        @device = nil
       end
-      
-    }
+    else                        # autodetection
+      Dir.foreach( '/dev/input/' ){|device|
+        next unless device =~ /^event\d+/  # only look at event*
+        device = '/dev/input/' + device
+
+        begin
+          $stderr << "Checking: " + (device) + "\n" if verbose
+          super(device)
+          $stderr << "Name: " +  (' name=' + self.dev_name)+ "\n" if verbose
+          if self.initialized? then
+            break
+          else
+            @device = nil
+            next
+          end
+        rescue Errno::EACCES, Errno::ENODEV
+          @device = nil
+          next
+        end
+      }
+    end
 
     ## could not find one
     raise RuntimeError.new("No PowerMate found in system") if !@device
@@ -540,7 +567,7 @@ if $0 == __FILE__ then
 ## find and open the PowerMate
 pmate = nil
 begin
-  pmate = PowerMate.new
+  pmate = PowerMate.new(ARGV[0])
 rescue RuntimeError => e
   $stderr << "Error: " + e.to_s + "\n"
   exit
